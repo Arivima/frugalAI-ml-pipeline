@@ -12,23 +12,36 @@ logger = logging.getLogger(__name__)
 class GCP():
 
     @staticmethod
-    def load_adapter_gcs():
+    def load_adapter_gcs(
+        project_id : str,
+        bucket_name : str,
+        adapter_name : str,
+        local_directory : str,
+    ):
         try:
             logger.info("load_model_gcs")
 
-            project_id = Config.GCP_PROJECT_ID
+            logger.info(f"project_id : {project_id}")
+            logger.info(f"bucket_name : {bucket_name}")
+            logger.info(f"adapter_name : {adapter_name}")
+            logger.info(f"local_directory : {local_directory}")
+
             if not project_id:
-                raise ValueError("GCP_PROJECT_ID is not configured in Config.")
+                raise ValueError("Missing project_id.")
+            if not bucket_name:
+                raise ValueError("Missing bucket_name.")
+            if not adapter_name:
+                raise ValueError("Missing adapter_name.")
+            if not local_directory:
+                raise ValueError("Missing local_directory.")
+
             client = storage.Client(project=project_id)
             logger.info('connected to client : %s', client.project)
 
-            bucket_name = Config.GCS_BUCKET_NAME
-            if not bucket_name:
-                raise ValueError("GCS_BUCKET_NAME is not configured in Config.")
             bucket = client.bucket(bucket_name)
             logger.info('connected to bucket : %s', bucket.name)
 
-            prefix = Config.ADAPTER_NAME + '/'
+            prefix = adapter_name + '/'
             logger.info(f'Looking with prefix : {prefix}')
             blobs = list(bucket.list_blobs(
                 prefix=prefix,
@@ -40,41 +53,45 @@ class GCP():
 
             blob_names = [blob.name for blob in blobs]
 
-            destination_directory = Config.DESTINATION_DIRECTORY
             results = transfer_manager.download_many_to_path(
-                bucket, blob_names, destination_directory=destination_directory
+                bucket, blob_names, local_directory=local_directory
             )
 
             for name, result in zip(blob_names, results):
                 if isinstance(result, Exception):
                     logger.error("Failed to download %s due to exception: %s", name, result)
                 else:
-                    logger.info("Downloaded %s.", destination_directory + '/' + name)
+                    logger.info("Downloaded %s.", local_directory + '/' + name)
 
 
             logger.info("✅ Adapter downloaded successfully from GCS.")
 
-            return destination_directory
+            return local_directory
 
         except Exception as e:
             logger.exception(f"❌ Error downloading adapter from GCS: {e}. Will try to load from cache.")
 
     @staticmethod    
-    def load_data_bq(start_date=None):
+    def load_data_bq(
+        project_id : str,
+        dataset_id : str,
+        table_id : str,
+        start_date=None,
+        ):
         try:
-            project_id = Config.GCP_PROJECT_ID
+            logger.info(f"project_id : {project_id}")
+            logger.info(f"dataset_id : {dataset_id}")
+            logger.info(f"table_id : {table_id}")
+            logger.info(f"start_date : {start_date}")
+            
             if not project_id:
-                raise ValueError("GCP_PROJECT_ID is not configured in Config.")
+                raise ValueError("Missing project_id.")
+            if not dataset_id:
+                raise ValueError("Missing dataset_id.")
+            if not table_id:
+                raise ValueError("Missing table_id.")
 
             client = bigquery.Client(project=project_id)
-
-            dataset_id = Config.BQ_DATASET_ID
-            if not dataset_id:
-                raise ValueError("BQ_DATASET_ID is not configured in Config.")
-
-            table_id = Config.BQ_TABLE_ID
-            if not table_id:
-                raise ValueError("BQ_TABLE_ID is not configured in Config.")
 
             logger.info(f'BigQuery table : {project_id}.{dataset_id}.{table_id}')
             
@@ -83,6 +100,7 @@ class GCP():
                 user_claim as text,
                 predicted_category as label_pred,
                 correct_category as label_true,
+                assistant_explanation as explanation,
                 created_at
             FROM `{dataset_id}.{table_id}`
             """
@@ -96,10 +114,10 @@ class GCP():
             return df
 
         except GoogleCloudError as e:
-            logger.error(f"Google Cloud error while inserting feedback: {e}")
+            logger.error(f"Google Cloud error load_data_bq: {e}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error while inserting feedback: {e}")
+            logger.error(f"Error load_data_bq: {e}")
             raise
 
 

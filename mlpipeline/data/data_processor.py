@@ -5,9 +5,10 @@
 
 import logging
 from sklearn.model_selection import train_test_split
-from datasets import Dataset
+from datasets import Dataset, ClassLabel
 from mlpipeline.gcp import GCP
-from mlpipeline.config import setup_logging
+from mlpipeline.config import setup_logging, Config
+
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,7 @@ def mock_df():
                 'text': text,
                 'label_pred': label_pred,
                 'label_true': category,
+                'explanation': 'blank for test',
                 'created_at': (base_time - time_offset).isoformat() + '+00:00'
             })
 
@@ -171,30 +173,70 @@ def mock_df():
     return df
 
 
+# USE SCHEMA VALIDATION
 class DataProcessor:
-    def __init__(self):
-        self.df = GCP.load_data_bq()
-        self.df =  mock_df()
+    def __init__(
+            self,
+            project_id:str,
+            dataset_id:str,
+            table_id:str,
+            start_date:str,
+            ):
+        logger.info('Loading training dataset from bq')
+        self.df = GCP.load_data_bq(
+            project_id = project_id,
+            dataset_id = dataset_id,
+            table_id = table_id,
+            start_date = start_date,
+        )
+        self.df = mock_df()
         self.ds = Dataset.from_pandas(self.df)
-        self.train_df = None
-        self.test_df = None
-        self.val_df = None
+        self.train_ds = None
+        self.test_ds = None
+        self.val_ds = None
 
     def create_splits(self, test_size=0.2):
+        logger.info("create_splits")
+
         try:
-            train_df, self.test_df = train_test_split(self.df, test_size=test_size, stratify=self.df['label_true'])
-            self.train_df, self.val_df = train_test_split(train_df, test_size=test_size, stratify=train_df['label_true'])
-            
-            return self.train_df, self.val_df, self.test_df
-        except ValueError as e:
-            logger.error(f'Error in create_splits : {e}')
-            raise 
+            if not isinstance(self.ds.features["label_true"], ClassLabel):
+                unique_labels = sorted(self.ds.unique("label_true"))
+                class_label = ClassLabel(names=unique_labels)
+                self.ds = self.ds.cast_column("label_true", class_label)
+
+            split1 = self.ds.train_test_split(
+                test_size=test_size,
+                seed=0,
+                stratify_by_column="label_true"
+            )
+            split2 = split1["train"].train_test_split(
+                test_size=test_size,
+                seed=0,
+                stratify_by_column="label_true"
+            )
+
+            self.test_ds = split1["test"]
+            self.train_ds = split2["train"]
+            self.val_ds   = split2["test"]
+
+            return self.train_ds, self.val_ds, self.test_ds
+
+        except Exception as e:
+            logger.error(f"Error in create_splits: {e}")
+            raise
+
+
 
 
 if __name__ == '__main__':
 
     setup_logging()
 
-    data = DataProcessor()
+    data = DataProcessor(
+        project_id = Config.GCP_PROJECT_ID,
+        dataset_id = Config.BQ_DATASET_ID,
+        table_id = Config.BQ_TABLE_ID,
+        start_date = None,
+    )
     data.create_splits()
     print(data.df.shape, data.ds.shape, data.train_df.shape, data.val_df.shape, data.test_df.shape)
