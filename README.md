@@ -1,6 +1,9 @@
 # frugalAI-ml-pipeline
 
 
+### Requirements
+mlpipeline doit etre run sur un GPU T4
+
 ### TODO
 - compute engine gpu 
 - resume_training

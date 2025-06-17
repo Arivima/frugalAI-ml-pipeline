@@ -193,7 +193,6 @@ class DataProcessor:
         self.ds = Dataset.from_pandas(self.df)
         self.train_ds = None
         self.test_ds = None
-        self.val_ds = None
 
     def create_splits(self, test_size=0.2):
         logger.info("create_splits")
@@ -209,17 +208,11 @@ class DataProcessor:
                 seed=0,
                 stratify_by_column="label_true"
             )
-            split2 = split1["train"].train_test_split(
-                test_size=test_size,
-                seed=0,
-                stratify_by_column="label_true"
-            )
 
+            self.train_ds = split1["train"]
             self.test_ds = split1["test"]
-            self.train_ds = split2["train"]
-            self.val_ds   = split2["test"]
 
-            return self.train_ds, self.val_ds, self.test_ds
+            return self.train_ds, self.test_ds
 
         except Exception as e:
             logger.error(f"Error in create_splits: {e}")
@@ -239,4 +232,4 @@ if __name__ == '__main__':
         start_date = None,
     )
     data.create_splits()
-    print(data.df.shape, data.ds.shape, data.train_df.shape, data.val_df.shape, data.test_df.shape)
+    print(data.df.shape, data.ds.shape, data.train_df.shape, data.test_df.shape)

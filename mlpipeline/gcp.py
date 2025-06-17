@@ -71,6 +71,8 @@ class GCP():
         except Exception as e:
             logger.exception(f"❌ Error downloading adapter from GCS: {e}. Will try to load from cache.")
 
+
+
     @staticmethod    
     def load_data_bq(
         project_id : str,

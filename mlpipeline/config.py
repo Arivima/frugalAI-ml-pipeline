@@ -3,6 +3,7 @@ import logging
 
 class Config:
     GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
+    GCP_REGION = os.getenv("GCP_REGION", "")
     BQ_DATASET_ID = os.getenv("BQ_DATASET_ID", "")
     BQ_TABLE_ID = os.getenv("BQ_TABLE_ID", "")
     GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "")
